@@ -27,10 +27,11 @@ class LLMClient:
       model.eval() # inference
 
       self.cache[self.model_id] = {'model': model, 'tokenizer': tokenizer}
-    
-      return self.cache[self.model_id]['model'], self.cache[self.model_id]['tokenizer']
+      
     else:
       print(f"[llm_client] Model {self.model_id} already in cache.")
+    
+    return self.cache[self.model_id]['model'], self.cache[self.model_id]['tokenizer']
 
   def generate_response(self, prompt: str, max_new_tokens: int = 200, temperature: float = 0.7, deterministic: bool = False) -> tuple[str, int, int]:
     """
