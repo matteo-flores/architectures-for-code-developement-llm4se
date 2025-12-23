@@ -24,8 +24,7 @@ class CommenterAgent():
                         {code}
                         """
 
-        # Aumento max_new_tokens rispetto al planner perché qui
-        # dobbiamo rigenerare l'intero codice sorgente + i commenti.
+
         response_text, _, _ = self.llm_client.generate_response(
             full_prompt, 
             max_new_tokens = 1024, 
@@ -33,7 +32,6 @@ class CommenterAgent():
             deterministic = True
         )
 
-        # Pulizia base nel caso il modello inserisca comunque markdown
         if "```python" in response_text:
             response_text = response_text.replace("```python", "").replace("```", "")
         
