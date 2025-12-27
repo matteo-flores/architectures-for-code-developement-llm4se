@@ -10,6 +10,16 @@ from tests.tests_task07 import TestTask7
 from tests.tests_task08 import TestTask8
 from tests.tests_task09 import TestTask9
 from tests.tests_task10 import TestTask10
+from tests.tests_task11 import TestTask11
+from tests.tests_task12 import TestTask12
+from tests.tests_task13 import TestTask13
+from tests.tests_task14 import TestTask14
+from tests.tests_task15 import TestTask15
+from tests.tests_task16 import TestTask16
+from tests.tests_task17 import TestTask17
+from tests.tests_task18 import TestTask18
+from tests.tests_task19 import TestTask19
+from tests.tests_task20 import TestTask20
 
 from utils.llm_client import LLMClient
 from agents.planner import PlannerAgent
@@ -154,16 +164,16 @@ def choose_code(codes, fun_name, task_number):
     8: TestTask8,
     9: TestTask9,
     10: TestTask10,
-    # 11: TestTask11,
-    # 12: TestTask12,
-    # 13: TestTask13,
-    # 14: TestTask14,
-    # 15: TestTask15,
-    # 16: TestTask16,
-    # 17: TestTask17,
-    # 18: TestTask18,
-    # 19: TestTask19,
-    # 20: TestTask20,
+    11: TestTask11,
+    12: TestTask12,
+    13: TestTask13,
+    14: TestTask14,
+    15: TestTask15,
+    16: TestTask16,
+    17: TestTask17,
+    18: TestTask18,
+    19: TestTask19,
+    20: TestTask20,
   }
 
   print(f"Task {task_number}")
