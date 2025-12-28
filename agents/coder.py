@@ -112,21 +112,32 @@ class CoderAgent:
 
     # Rimuove leading space comune (LLM indent)
     lines = response.splitlines()
-    min_indent = None
+
+    # 🔹 Scarta tutto fino alla prima def
+    while lines and not lines[0].lstrip().startswith("def "):
+        lines.pop(0)
+      
+    # 🔹 Calcola indentazione della def
+    first_line = lines[0]
+    def_indent = len(first_line) - len(first_line.lstrip())
+
+    code_lines = []
+
     for line in lines:
         stripped = line.lstrip()
-        if stripped:
-            indent = len(line) - len(stripped)
-            if min_indent is None or indent < min_indent:
-                min_indent = indent
-    if min_indent is None:
-        min_indent = 0
-    lines = [line[min_indent:] for line in lines]
+        indent = len(line) - len(stripped)
 
-    # Prendi solo le righe che contengono codice (ignora linee vuote all’inizio)
-    while lines and not lines[0].strip().startswith("def "):
-        lines.pop(0)
+        # def
+        if stripped.startswith("def "):
+            code_lines.append(stripped)
+            continue
 
-    return "\n".join(lines).rstrip()
+        # corpo funzione
+        if stripped == "" or indent > def_indent:
+            code_lines.append(line[def_indent:])
+        else:
+            break  # stop su testo libero
+
+    return "\n".join(code_lines).rstrip()
 
 
