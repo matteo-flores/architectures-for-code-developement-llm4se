@@ -50,10 +50,12 @@ MAX_RETRIES = 10
 MODEL_ID_LARGE = "meta-llama/Llama-2-7b-hf" # big LLM
 MODEL_ID_SMALL = "gpt2"                      # small LLM
 MODEL_ID_MISTRAL = "mistralai/Mistral-7B-Instruct-v0.3" # planner LLM
+MODEL_ID_QWEN = "Qwen/Qwen2.5-Coder-7B-Instruct"
 
 LLM_LARGE_CLIENT = LLMClient(model_id=MODEL_ID_LARGE)
 LLM_SMALL_CLIENT = LLMClient(model_id=MODEL_ID_SMALL)
 LLM_MISTRAL_CLIENT = LLMClient(model_id=MODEL_ID_MISTRAL)
+LLM_QWEN = LLMClient(model_id=MODEL_ID_QWEN)
 
 # from the paper
 MODEL_ID_LLAMA = "meta-llama/Llama-3-70B-Instruct"
@@ -121,6 +123,7 @@ def run_pipeline_paper(task_data, planner_client, coder_client, tester_client, r
 
   tester = TesterAgent(llm_client = tester_client)
   tests = tester.generate_tests(prompt, unit_tests)
+  print("generated tests:", tests)
 
   reviewer = ReviewerAgent(llm_client=reviewer_client)
   refiner = RefinerAgent(llm_client=refiner_client)
@@ -210,10 +213,11 @@ def choose_code(codes, fun_name, task_number):
           # invese scale (0.1 ms -> 1.0, then decreasing)
           ideal_time = 0.00001 
           time_norm = ideal_time / max(execution_time, ideal_time)
-
+          print(f"\tMI: {MI}, CC: {CC}, execution_time: {execution_time}")
           # (50-30-20)
           score = (time_norm * 0.50) + (mi_norm * 0.30) + (cc_norm * 0.20)
-          
+          print(f"\nTotal score: {score}")
+
           if best_code is None or score > best_score:
             best_code = code
             best_score = score
@@ -276,11 +280,11 @@ def main():
 
     #result = single_agent_arch(task_data, LLM_LARGE_CLIENT)
     #results.append(result)
-    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_LARGE_CLIENT, LLM_LARGE_CLIENT, LLM_SMALL_CLIENT, "Architeture 2")
+    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN, LLM_QWEN, LLM_SMALL_CLIENT, "Architeture 2")
     results.append(result)
-    result = run_pipeline(task_data, LLM_LARGE_CLIENT, LLM_SMALL_CLIENT, LLM_LARGE_CLIENT, LLM_SMALL_CLIENT, "Architeture 3")
+    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN, LLM_QWEN, LLM_SMALL_CLIENT, "Architeture 3")
     results.append(result)
-    result = run_pipeline_paper(task_data, LLM_LLAMA, LLM_CLAUDE, LLM_LARGE_CLIENT, LLM_O1, LLM_MISTRAL_CLIENT)
+    result = run_pipeline_paper(task_data, LLM_LLAMA, LLM_CLAUDE, LLM_QWEN, LLM_O1, LLM_MISTRAL_CLIENT)
     results.append(result)
 
     # evaluation

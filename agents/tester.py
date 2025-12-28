@@ -1,4 +1,5 @@
 import traceback
+import re
 
 class TesterAgent:
     def __init__(self, llm_client):
@@ -53,13 +54,23 @@ class TesterAgent:
 
     def _parse_and_clean_response(self, response_text):
         """
-        Pulisce la risposta dell'LLM per estrarre solo il codice eseguibile.
-        Rimuove i titoli delle sezioni (IMPORTS, TEST_SUITE) e formatta il codice.
+        Estrae solo il codice Python dai test generati, 
+        rimuovendo intestazioni come 'NEW TESTS (added by you):'
         """
-
-        clean_code = response_text.replace("IMPORTS:", "").replace("TEST_SUITE:", "")
-        clean_code = clean_code.replace("```python", "").replace("```", "")
-        return clean_code.strip()
+        # 1. Cerca blocchi markdown
+        python_block = re.search(r"```python\s*(.*?)```", response_text, re.DOTALL | re.IGNORECASE)
+        if python_block:
+            clean_code = python_block.group(1).strip()
+        else:
+            # 2. Se non ci sono blocchi, rimuovi manualmente le linee di testo comuni
+            lines = response_text.splitlines()
+            forbidden_phrases = ["NEW TESTS", "TEST_SUITE", "IMPORTS", "added by you"]
+            clean_lines = [l for l in lines if not any(phrase in l for phrase in forbidden_phrases)]
+            clean_code = "\n".join(clean_lines).strip()
+        
+        # Rimuovi eventuali rimasugli di backtick
+        clean_code = clean_code.replace("```", "")
+        return clean_code
 
     def test(self, code_to_test, test_suite_code):
         """

@@ -47,26 +47,23 @@ class CoderAgent:
 
   def _generate_prompt_template(self, *, prompt: str, plan: str, signature: str) -> str:
     return f"""You are an expert Python programmer.
+    
+    TASK DESCRIPTION:
+    {prompt}
+    
+    INSTRUCTIONS:
+    1. Include all necessary imports at the beginning (e.g., from typing import List).
+    2. Follow the DETAILED PLAN step by step.
+    3. Use exactly this FUNCTION SIGNATURE: {signature}
 
-      TASK DESCRIPTION:
-      {prompt}
-      
-      You are given a VERIFIED FUNCTION SIGNATURE and a DETAILED PLAN.
-      You MUST follow the plan step by step.
-      
-      FUNCTION SIGNATURE (use exactly this):
-      {signature}
-      
-      DETAILED PLAN:
-      {plan}
-      
-      Requirements:
-      - Write ONLY the function body and signature above
-      - Do NOT change the signature
-      - Handle all edge cases listed
-      - Output ONLY valid Python code
-      - Do NOT include explanations, markdown, or extra text
-      """
+    DETAILED PLAN:
+    {plan}
+    
+    Requirements:
+    - Output ONLY valid Python code.
+    - Do NOT include explanations, markdown, or extra text.
+    - Start directly with the necessary imports.
+    """
 
 
   def _fix_prompt_template(self, *, prompt: str, plan: str, current_code: str, feedback: str, signature: str) -> str:
@@ -97,47 +94,31 @@ class CoderAgent:
 
 
   def _extract_clean_code(self, response: str) -> str:
-
-    # Rimuove eventuali docstring triple quote all'inizio
-    response = re.sub(r'^["\']{3}[\s\S]*?["\']{3}', '', response, count=1).strip()
-
-    # Cerca blocchi ```python``` o ``` generici
-    python_block = re.search(r"```python\s*(.*?)```", response, re.DOTALL | re.IGNORECASE)
-    if python_block:
-        response = python_block.group(1)
-    else:
-        generic_block = re.search(r"```\s*(.*?)```", response, re.DOTALL)
-        if generic_block:
-            response = generic_block.group(1)
-
-    # Rimuove leading space comune (LLM indent)
+    # Pulizia aggressiva iniziale dei backtick multipli
+    # Rimuove tutti i blocchi markdown lasciando solo il contenuto testuale
+    response = re.sub(r"```python", "", response, flags=re.IGNORECASE)
+    response = re.sub(r"```", "", response)
+    
     lines = response.splitlines()
-
-    # 🔹 Scarta tutto fino alla prima def
-    while lines and not lines[0].lstrip().startswith("def "):
-        lines.pop(0)
-      
-    # 🔹 Calcola indentazione della def
-    first_line = lines[0]
-    def_indent = len(first_line) - len(first_line.lstrip())
-
     code_lines = []
-
+    
+    # Identifichiamo parole chiave che segnalano l'inizio del codice reale
+    code_keywords = ("import ", "from ", "def ")
+    
+    in_code_block = False
     for line in lines:
-        stripped = line.lstrip()
-        indent = len(line) - len(stripped)
+        stripped = line.strip()
+        
+        # Inizia a raccogliere dalla prima riga di codice (import o def)
+        if any(stripped.startswith(k) for k in code_keywords):
+            in_code_block = True
+            
+        if in_code_block:
+            # Continua a raccogliere finché le righe sono coerenti con il codice
+            # (indentate, vuote, o nuove definizioni/import)
+            if line.startswith(" ") or line.startswith("\t") or stripped == "" or any(stripped.startswith(k) for k in code_keywords):
+                code_lines.append(line)
+            else:
+                break
 
-        # def
-        if stripped.startswith("def "):
-            code_lines.append(stripped)
-            continue
-
-        # corpo funzione
-        if stripped == "" or indent > def_indent:
-            code_lines.append(line[def_indent:])
-        else:
-            break  # stop su testo libero
-
-    return "\n".join(code_lines).rstrip()
-
-
+    return "\n".join(code_lines).strip()
