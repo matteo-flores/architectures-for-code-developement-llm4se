@@ -131,7 +131,7 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   coder = CoderAgent(llm_client=coder_client)
 
   tester = TesterAgent(llm_client=tester_client)
-  tests = tester.generate_tests(prompt, unit_tests, entry_point)
+  tests = tester.prepare_review_context(prompt, unit_tests, entry_point)
 
   current_code = ""
   feedback = ""
@@ -141,7 +141,7 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   while attempts < MAX_RETRIES and not is_passing:
     current_code = coder.code(prompt, plan, current_code, feedback)
     print(f"  Code generated: {current_code}")
-    success, error_msg = tester.test(current_code, tests)
+    success, error_msg = tester.perform_static_review(current_code, tests)
     
     if success:
       is_passing = True
@@ -347,9 +347,9 @@ def main():
     clear_hf_cache()
     result = single_agent_arch(task_data, LLM_QWEN_SA)
     results.append(result)
-    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN, LLM_QWEN, LLM_SMALL_CLIENT, "Architeture 2")
+    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN, LLM_MISTRAL_CLIENT, LLM_SMALL_CLIENT, "Architeture 2")
     results.append(result)
-    result = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN, LLM_QWEN, LLM_SMALL_CLIENT, "Architeture 3")
+    result = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN, LLM_MISTRAL_CLIENT, LLM_SMALL_CLIENT, "Architeture 3")
     results.append(result)
     # cleaning
     gc.collect()
