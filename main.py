@@ -26,8 +26,6 @@ from agents.planner import PlannerAgent
 from agents.coder import CoderAgent
 from agents.tester import TesterAgent
 from agents.commenter import CommenterAgent
-from agents.refiner import RefinerAgent
-from agents.reviewer import ReviewerAgent
 from radon.metrics import mi_visit
 from radon.metrics import ComplexityVisitor
 import time
@@ -51,39 +49,41 @@ else:
 TASK_NUMBER = 20
 MAX_RETRIES = 10
 
-MODEL_ID_LARGE = "meta-llama/Llama-2-7b-hf" # big LLM
-#MODEL_ID_SMALL = "gpt2"                      # small LLM
-MODEL_ID_SMALL = "Qwen/Qwen2.5-Coder-1.5B-Instruct" #small LLM
+MODEL_ID_SMALL = "Qwen/Qwen2.5-Coder-1.5B-Instruct" #coder LLM
 MODEL_ID_MISTRAL = "mistralai/Mistral-7B-Instruct-v0.3" # planner LLM
 MODEL_ID_DISTILL_LLAMA = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B" # planner LLM
 MODEL_ID_QWEN = "Qwen/Qwen2.5-Coder-7B-Instruct"
 MODEL_ID_QWEN_SA = "Qwen/Qwen2.5-Coder-14B-Instruct"
 
-LLM_LARGE_CLIENT = LLMClient(model_id=MODEL_ID_LARGE)
 LLM_SMALL_CLIENT = LLMClient(model_id=MODEL_ID_SMALL)
 LLM_MISTRAL_CLIENT = LLMClient(model_id=MODEL_ID_MISTRAL)
 LLM_DISTILL_LLAMA_CLIENT = LLMClient(model_id=MODEL_ID_DISTILL_LLAMA)
 LLM_QWEN = LLMClient(model_id=MODEL_ID_QWEN)
 LLM_QWEN_SA = LLMClient(model_id=MODEL_ID_QWEN_SA)
 
-# from the paper
-MODEL_ID_LLAMA = "meta-llama/Llama-3-70B-Instruct"
-MODEL_ID_CLAUDE = "claude-3-5-sonnet-20240620"
-MODEL_ID_O1 = "openai/o1-preview"
-#MODEL_ID_MISTRAL = "mistralai/Mistral-7B-Instruct-v0.3"
-
-LLM_LLAMA = LLMClient(model_id=MODEL_ID_LLAMA)              # planner
-LLM_CLAUDE = LLMClient(model_id=MODEL_ID_CLAUDE)            # coder
-LLM_O1 = LLMClient(model_id=MODEL_ID_O1)                    # reviewer
-LLM_MISTRAL_CLIENT = LLMClient(model_id=MODEL_ID_MISTRAL)   # refiner
-
 def clear_hf_cache():
-  """Removes downloaded models to free space on the disk"""
+  """ Cleans RAM and disk through an aggressive way """
+  print("\n[SYSTEM] Starting deep cleaning...")
+  
+  # celans GPU's RAM
+  if torch.cuda.is_available():
+      torch.cuda.empty_cache()
+      torch.cuda.ipc_collect()
+  gc.collect()
+  
+  # cleans files on the disk (cacke)
   cache_path = os.path.expanduser("~/.cache/huggingface/hub")
   if os.path.exists(cache_path):
-    shutil.rmtree(cache_path)
-    os.makedirs(cache_path)
-  print("--- Hugging Face Cache Cleared ---")
+    try:
+      shutil.rmtree(cache_path)
+      os.makedirs(cache_path, exist_ok=True)
+      print("[SYSTEM] Disk cache Hugging Face deleted.")
+    except Exception as e:
+      print(f"[SYSTEM] Error in disk cleaning: {e}")
+  else:
+    print("[SYSTEM] No cache found on the disk.")
+    
+  print("[SYSTEM] Cleaning completed.\n")
 
 def single_agent_arch(task_data, client):
   # The original task prompt from HumanEval
@@ -131,7 +131,7 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   coder = CoderAgent(llm_client=coder_client)
 
   tester = TesterAgent(llm_client=tester_client)
-  tests = tester.generate_tests(prompt, unit_tests, entry_point)
+  tests = tester.prepare_review_context(prompt, unit_tests, entry_point)
 
   current_code = ""
   feedback = ""
@@ -141,7 +141,7 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   while attempts < MAX_RETRIES and not is_passing:
     current_code = coder.code(prompt, plan, current_code, feedback)
     print(f"  Code generated: {current_code}")
-    success, error_msg = tester.test(current_code, tests)
+    success, error_msg = tester.perform_static_review(current_code, tests)
     
     if success:
       is_passing = True
@@ -156,46 +156,6 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   
   return final_code
 
-def run_pipeline_paper(task_data, planner_client, coder_client, reviewer_client, refiner_client):
-  task_id = task_data['task_id']
-  prompt = task_data['prompt']
-  
-  print(f"--- Running Paper Architecture (Reviewer -> Refiner) on {task_id} ---")
-
-  planner = PlannerAgent(llm_client=planner_client)
-  plan = planner.plan(prompt)
-  
-  coder = CoderAgent(llm_client=coder_client)
-  reviewer = ReviewerAgent(llm_client=reviewer_client)
-  refiner = RefinerAgent(llm_client=refiner_client)
-
-  current_code = ""
-  feedback = ""
-  is_passing = False
-  attempts = 0
-
-  while attempts < MAX_RETRIES and not is_passing:
-    print(f"  > Step {attempts+1}/{MAX_RETRIES}")
-
-    if attempts == 0:
-      current_code = coder.code(prompt, plan, current_code, feedback)
-    else:
-      current_code = refiner.refine(current_code, feedback, prompt)
-    
-    review_feedback = reviewer.review(current_code, prompt)
-    
-    print(f"    Reviewer says: {review_feedback[:100]}...")
-
-    if "APPROVED" in review_feedback.upper():
-      is_passing = True
-      print(f"  [Attempt {attempts+1}] Success! Code Approved by Reviewer.")
-    else:
-      feedback = review_feedback
-      attempts += 1
-      print(f"  [Attempt {attempts}] Reviewer found issues. Refining...")
-
-  final_code = current_code
-  return final_code
 
 def choose_code(codes, fun_name, task_number):
   best_code = None
@@ -327,9 +287,11 @@ def main():
 
   print("Architetures:")
   print("1.\tSingle agent")
-  print("2.\tPlanner (small) -> Coder (big) -> Tester -> Commenter")
-  print("3.\tPlanner (big) -> Coder (small) -> Tester -> Commenter")
-  print("4.\tPlanner -> Coder -> Reviwer -> Refiner")
+  print("2.\tPlanner (Mistral7b) -> Coder (Qwen7B) -> Tester -> Commenter")
+  print("3.\tPlanner (Mistral7b) -> Coder (MIstral7B) -> Tester -> Commenter")
+  print("4.\tPlanner (DeepSeek) -> Coder (Qwen7B) -> Tester -> Commenter")
+  print("5.\tPlanner (DeepSeek) -> Coder (Mistral7B) -> Tester -> Commenter")
+  print("6.\tPlanner -> Coder -> Reviwer -> Refiner")
 
   for i in range(TASK_NUMBER):
     task_file = f"tasks/task_{i+1:02}.json"
@@ -342,20 +304,21 @@ def main():
     results = list()
 
     # (pre) cleaning
-    gc.collect()
-    torch.cuda.empty_cache()
     clear_hf_cache()
+
     result = single_agent_arch(task_data, LLM_QWEN_SA)
     results.append(result)
-    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN, LLM_QWEN, LLM_SMALL_CLIENT, "Architeture 2")
-    results.append(result)
-    result = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN, LLM_QWEN, LLM_SMALL_CLIENT, "Architeture 3")
-    results.append(result)
+
     # cleaning
-    gc.collect()
-    torch.cuda.empty_cache()
     clear_hf_cache()
-    result = run_pipeline_paper(task_data, LLM_LLAMA, LLM_CLAUDE, LLM_O1, LLM_MISTRAL_CLIENT)
+
+    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN, LLM_MISTRAL_CLIENT, LLM_SMALL_CLIENT, "Architeture 2")
+    results.append(result)
+    result = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_MISTRAL_CLIENT, LLM_MISTRAL_CLIENT, LLM_SMALL_CLIENT, "Architeture 3")
+    results.append(result)
+    result = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN, LLM_MISTRAL_CLIENT, LLM_SMALL_CLIENT, "Architeture 4")
+    results.append(result)
+    result = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_MISTRAL_CLIENT, LLM_MISTRAL_CLIENT, LLM_SMALL_CLIENT, "Architeture 5")
     results.append(result)
 
     # evaluation
