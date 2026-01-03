@@ -7,8 +7,7 @@ class TesterAgent:
 
     def prepare_review_context(self, task_prompt, basic_json_tests, entry_point):
         """
-        In questa modalità 'Static Review', non generiamo codice Python eseguibile.
-        Invece, prepariamo il 'Contesto di Verifica' che il revisore userà.
+        Prepara il contesto per la revisione statica.
         """
         context = f"""
         TASK DESCRIPTION:
@@ -29,19 +28,21 @@ class TesterAgent:
         altrimenti (False, Feedback).
         """
         
-        # Costruiamo il prompt per il Revisore/Tester
         review_prompt = textwrap.dedent(f"""\
-            You are a Senior Python QA Engineer performing a Static Code Analysis.
+            You are a Senior Python QA Engineer and a Strict Code Compiler.
             
             ### GOAL
-            Verify if the provided PYTHON CODE correctly solves the TASK and satisfies the REQUIRED BEHAVIOR.
+            Verify if the provided PYTHON CODE is COMPLETE, EXECUTABLE, and CORRECT.
 
-            ### FORMAT VERIFICATION
-            Strictly check that the provided output contains **ONLY valid Python code**.
-            1. Fail if the code is wrapped in markdown blocks (e.g., ```python ... ```).
-            2. Fail if there is any conversational text, explanations, or introductory phrases.
-            3. The content must be directly executable as a .py file without modification.
-            
+            ### CRITICAL CHECKS (FAIL IMMEDIATELY IF ANY ARE TRUE)
+            1. **EMPTY CODE**: If the code block is empty, contains only comments, or just "pass" -> **FAIL**.
+            2. **MISSING IMPORTS**: 
+               - If `List`, `Dict`, `Optional`, `Tuple` are used in type hints -> `from typing import ...` MUST be present.
+               - If `math`, `re`, `collections` are used -> they MUST be imported.
+               - **DO NOT ASSUME imports exist.** If they are not written, the code is BROKEN -> **FAIL**.
+            3. **LINE NUMBERS**: If lines start with numbers (e.g., "1. import") -> **FAIL**.
+            4. **PLACEHOLDERS**: If the code contains "TODO" or "..." instead of logic -> **FAIL**.
+
             ### TASK CONTEXT
             {context}
             
@@ -51,62 +52,55 @@ class TesterAgent:
             ```
             
             ### INSTRUCTIONS
-            1. Mentally trace the execution of the code with the provided JSON inputs.
-            2. Check for syntax errors, logical bugs, or infinite loops.
-            3. Check if the function signature matches the entry point exactly.
-            4. Be STRICT. If there is any logical flaw, reject it.
+            1. Act like a Python Interpreter. Scan line-by-line for NameErrors (missing imports).
+            2. Mentally trace the execution with the provided JSON inputs.
+            3. Check for logical bugs or infinite loops.
+            4. Be extremely strict. It is better to reject valid code than to pass broken code.
             
             ### OUTPUT FORMAT
-            You must end your response with exactly one of these two lines:
-            - If code is correct: "STATUS: PASS"
-            - If code is incorrect: "STATUS: FAIL" followed by a concise explanation of the bug.
-            
-            Start your response with your reasoning.
+            Start with your reasoning/analysis.
+            End your response with exactly one of these two lines:
+            - "STATUS: PASS"
+            - "STATUS: FAIL" followed by a concise error message (e.g., "Missing typing imports", "Code is empty").
             """)
 
-        # Chiamata all'LLM (Usa un numero di token sufficiente per il ragionamento)
+        # Chiamata all'LLM
         response_text, _, _ = self.llm_client.generate_response(
             review_prompt, 
             max_new_tokens=1024, 
-            temperature=0.0, # Determinismo massimo per la review
+            temperature=0.0, # Temperatura a 0 per massima severità
             deterministic=True
         )
 
-        # Parsing della risposta
         return self._parse_review_result(response_text)
 
     def _parse_review_result(self, response):
         """Analizza l'output testuale dell'LLM per determinare Pass/Fail."""
         
-        # Pulizia generica whitespace
         clean_response = response.strip()
         
-        # Strategia: Cerca l'ULTIMA occorrenza di STATUS: PASS/FAIL
-        # Questo evita falsi positivi se il modello "pensa ad alta voce" prima di decidere.
-        # Rfind restituisce l'indice dell'inizio della stringa trovata, o -1.
+        # Cerca l'ULTIMA occorrenza di STATUS: PASS/FAIL
         pass_index = clean_response.rfind("STATUS: PASS")
         fail_index = clean_response.rfind("STATUS: FAIL")
         
         # Se non trova nulla
         if pass_index == -1 and fail_index == -1:
-            # Fallback euristico generico
+            # Fallback: se la risposta è molto breve e contiene parole chiave negative
             lower_resp = clean_response.lower()
-            if "incorrect" in lower_resp or "error" in lower_resp or "bug" in lower_resp or "fail" in lower_resp:
+            if "fail" in lower_resp or "error" in lower_resp or "missing" in lower_resp or "empty" in lower_resp:
                  return False, f"Reviewer Ambiguous Failure: {clean_response}"
             return False, f"Format Error: Reviewer did not output STATUS: PASS/FAIL.\nFull Response: {clean_response}"
 
-        # Se trova entrambi (raro, ma possibile nel ragionamento), vince l'ultimo scritto
+        # Se trova entrambi, vince l'ultimo scritto (ragionamento vs conclusione)
         if pass_index > fail_index:
             return True, "Passed (Static Analysis Approved)"
         else:
-            # È un FAIL. Estraiamo la spiegazione che segue lo status.
-            # Prendiamo tutto il testo che viene DOPO "STATUS: FAIL"
+            # È un FAIL. Estraiamo la spiegazione
             feedback_start = fail_index + len("STATUS: FAIL")
             feedback = clean_response[feedback_start:].strip()
             
             if not feedback:
-                # Se lo status era l'ultima cosa, cerchiamo il feedback nelle righe precedenti
-                # (Euristica opzionale, ma utile)
-                feedback = clean_response[:fail_index].strip()[-500:] # Prendi gli ultimi 500 caratteri prima
+                # Se non c'è testo dopo STATUS: FAIL, prendiamo le righe precedenti
+                feedback = clean_response[:fail_index].strip()[-500:]
             
             return False, feedback
