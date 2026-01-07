@@ -35,7 +35,7 @@ from tests.tests_task20 import TestTask20
 from utils.llm_client import LLMClient
 from agents.planner import PlannerAgent
 from agents.coder import CoderAgent
-from agents.tester import TesterAgent
+from agents.reviewer import ReviewerAgent
 from agents.commenter import CommenterAgent
 from radon.metrics import mi_visit, ComplexityVisitor
 
@@ -123,9 +123,9 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   plan = planner.plan(prompt)
   
   coder = CoderAgent(llm_client=coder_client)
-  tester = TesterAgent(llm_client=tester_client)
+  reviewer = ReviewerAgent(llm_client=tester_client)
   
-  context = tester.prepare_review_context(prompt, unit_tests, entry_point)
+  context = reviewer.prepare_review_context(prompt, unit_tests, entry_point)
 
   current_code = ""
   feedback = ""
@@ -136,7 +136,7 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
     current_code = coder.code(prompt, plan, current_code, feedback)
     print(f"  [DEBUG] Code generated:\n", current_code)
     
-    success, error_msg = tester.perform_static_review(current_code, context)
+    success, error_msg = reviewer.perform_static_review(current_code, context)
     
     if success:
       is_passing = True
@@ -302,28 +302,28 @@ def main():
 
     # --- PIPELINE 2 ---
     clear_hf_cache()
-    code2 = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN_SA, LLM_QWEN, LLM_SMALL_CLIENT, "Arch 2")
+    code2 = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN_SA, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 2")
     save_intermediate_code(i+1, 2, code2)
     score2 = evaluate_and_log(code2, "2_Mistral_Qwen", task_data, i)
     if score2 > best_score: best_score, best_code, best_arch = score2, code2, "2"
 
     # --- PIPELINE 3 ---
     clear_hf_cache()
-    code3 = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM__MISTRAL_NEMO_CLIENT, LLM_QWEN, LLM_SMALL_CLIENT, "Arch 3")
+    code3 = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM__MISTRAL_NEMO_CLIENT, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 3")
     save_intermediate_code(i+1, 3, code3)
     score3 = evaluate_and_log(code3, "3_Mistral_Nemo", task_data, i)
     if score3 > best_score: best_score, best_code, best_arch = score3, code3, "3"
 
     # --- PIPELINE 4 ---
     clear_hf_cache()
-    code4 = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN_SA, LLM_QWEN, LLM_SMALL_CLIENT, "Arch 4")
+    code4 = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN_SA, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 4")
     save_intermediate_code(i+1, 4, code4)
     score4 = evaluate_and_log(code4, "4_DeepSeek_Qwen", task_data, i)
     if score4 > best_score: best_score, best_code, best_arch = score4, code4, "4"
 
     # --- PIPELINE 5 ---
     clear_hf_cache()
-    code5 = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM__MISTRAL_NEMO_CLIENT, LLM_QWEN, LLM_SMALL_CLIENT, "Arch 5")
+    code5 = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM__MISTRAL_NEMO_CLIENT, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 5")
     save_intermediate_code(i+1, 5, code5)
     score5 = evaluate_and_log(code5, "5_DeepSeek_Nemo", task_data, i)
     if score5 > best_score: best_score, best_code, best_arch = score5, code5, "5"
