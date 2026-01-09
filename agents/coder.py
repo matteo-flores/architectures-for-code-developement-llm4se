@@ -62,7 +62,7 @@ class CoderAgent:
     
     Requirements:
     - Output ONLY valid Python code.
-    - Do NOT include explanations, markdown, or extra text.
+    - Do NOT include Python comments, explanations, markdown, or extra text.
     - Start directly with the necessary imports.
     """
 
