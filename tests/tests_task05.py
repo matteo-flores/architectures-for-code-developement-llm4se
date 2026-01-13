@@ -44,7 +44,6 @@ class TestTask5:
   def test_03_less_than_four(self):
       test_dict = {'short': ['apple', 'apple', 'banana']}
       out = self._safe_call(test_dict)
-      # Fix: controllo condizionale per liste
       if isinstance(out, list):
           assert len(out) <= 4
 
