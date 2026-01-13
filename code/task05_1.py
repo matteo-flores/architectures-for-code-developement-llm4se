@@ -1,14 +1,19 @@
-from collections import Counter
-
 def count_common(words):
     """ Write a function to count the most common words in a dictionary. """
+    # Check if the input is a dictionary
+    if not isinstance(words, dict):
+        raise ValueError("Input must be a dictionary")
+    
+    # Extract all words from the dictionary values
+    all_words = []
+    for value in words.values():
+        if isinstance(value, str):
+            all_words.extend(value.split())
+        elif isinstance(value, list):
+            all_words.extend(value)
+    
     # Count the occurrences of each word
-    word_counts = Counter(words)
+    word_counts = Counter(all_words)
     
-    # Find the maximum frequency
-    max_frequency = max(word_counts.values())
-    
-    # Collect all words with the maximum frequency
-    most_common_words = [word for word, count in word_counts.items() if count == max_frequency]
-    
-    return most_common_words
+    # Find the most common word(s)
+    most_common = word_counts.most_common(1)
