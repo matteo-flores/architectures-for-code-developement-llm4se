@@ -5,7 +5,7 @@ class TestTask18:
     self.fun = is_beautiful
 
   def get_benchmark_input(self):
-    return (2, 4, 6)
+    return ([2, 4, 6],)
 
   def execute_tests(self):
     tests_passed = 0
@@ -23,33 +23,33 @@ class TestTask18:
     return tests_passed, total_tests
 
   def test_01_basic_beautiful(self):
-    result = self.fun(2, 4, 6)
-    assert result == "YES" or result == True
+        result = self.fun([2, 4, 6])
+        assert result == "YES" or result == True or result == "yes"
 
   def test_02_not_beautiful(self):
-    result = self.fun(2, 5, 6)
-    assert result == "NO" or result == False
+        result = self.fun([2, 5, 6])
+        assert result == "NO" or result == False or result == "no"
 
   def test_03_all_same_height(self):
-    result = self.fun(5, 5, 5)
-    assert result == "YES" or result == True
+        result = self.fun([5, 5, 5])
+        assert result == "YES" or result == True or result == "yes"
 
   def test_04_descending_arithmetic(self):
-    result = self.fun(9, 6, 3)
-    assert result == "YES" or result == True
+        result = self.fun([9, 6, 3])
+        assert result == "YES" or result == True or result == "yes"
 
   def test_05_zero_middle(self):
-    result = self.fun(1, 0, -1)
-    assert result == "YES" or result == True
+        result = self.fun([1, 0, -1])
+        assert result == "YES" or result == True or result == "yes"
 
   def test_06_large_numbers(self):
-    result = self.fun(100, 200, 300)
-    assert result == "YES" or result == True
+        result = self.fun([100, 200, 300])
+        assert result == "YES" or result == True or result == "yes"
 
   def test_07_not_arithmetic(self):
-    result = self.fun(1, 2, 4)
-    assert result == "NO" or result == False
+        result = self.fun([1, 2, 4])
+        assert result == "NO" or result == False or result == "no"
 
   def test_08_negative_numbers(self):
-    result = self.fun(-6, -4, -2)
-    assert result == "YES" or result == True
+        result = self.fun([-6, -4, -2])
+        assert result == "YES" or result == True or result == "yes"
