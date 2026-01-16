@@ -44,6 +44,11 @@ Task,Architecture,Passed,Tests_Ratio,MI,CC,Time,Score
 9,3_Mistral_Nemo,NO,0/6,-1.00,-1.00,-1.000000,-1.0000
 9,4_DeepSeek_Qwen,NO,4/6,-1.00,-1.00,-1.000000,-1.0000
 9,5_DeepSeek_Nemo,ERROR,0/0,-1.00,-1.00,-1.000000,-1.0000
+10,1_SingleAgent,ERROR,0/0,-1.00,-1.00,-1.000000,-1.0000
+10,2_Mistral_Qwen,NO,0/3,-1.00,-1.00,-1.000000,-1.0000
+10,3_Mistral_Nemo,ERROR,0/0,-1.00,-1.00,-1.000000,-1.0000
+10,4_DeepSeek_Qwen,NO,0/3,-1.00,-1.00,-1.000000,-1.0000
+10,5_DeepSeek_Nemo,ERROR,0/0,-1.00,-1.00,-1.000000,-1.0000
 13,1_SingleAgent,NO_FUNC,0/0,-1.00,-1.00,-1.000000,-1.0000
 13,2_Mistral_Qwen,NO,1/9,-1.00,-1.00,-1.000000,-1.0000
 13,3_Mistral_Nemo,NO,5/9,-1.00,-1.00,-1.000000,-1.0000
