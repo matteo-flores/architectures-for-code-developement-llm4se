@@ -1,37 +1,12 @@
 import json
 import os
 import re
-import gc
-import torch
-import shutil
 import time
 import csv
-from dotenv import load_dotenv
-from huggingface_hub import login
+#from dotenv import load_dotenv
+#from huggingface_hub import login
 
-# --- IMPORT DEI TEST ---
-from tests.tests_task01 import TestTask1
-from tests.tests_task02 import TestTask2
-from tests.tests_task03 import TestTask3
-from tests.tests_task04 import TestTask4
-from tests.tests_task05 import TestTask5
-from tests.tests_task06 import TestTask6
-from tests.tests_task07 import TestTask7
-from tests.tests_task08 import TestTask8
-from tests.tests_task09 import TestTask9
-from tests.tests_task10 import TestTask10
-from tests.tests_task11 import TestTask11
-from tests.tests_task12 import TestTask12
-from tests.tests_task13 import TestTask13
-from tests.tests_task14 import TestTask14
-from tests.tests_task15 import TestTask15
-from tests.tests_task16 import TestTask16
-from tests.tests_task17 import TestTask17
-from tests.tests_task18 import TestTask18
-from tests.tests_task19 import TestTask19
-from tests.tests_task20 import TestTask20
-
-# --- IMPORT AGENTI ---
+# --- IMPORT AGENTS ---
 from utils.llm_client import LLMClient
 from agents.planner import PlannerAgent
 from agents.coder import CoderAgent
@@ -39,64 +14,39 @@ from agents.reviewer import ReviewerAgent
 from agents.commenter import CommenterAgent
 from radon.metrics import mi_visit, ComplexityVisitor
 
-# --- SETUP ---
-load_dotenv()
-token = os.getenv("HF_TOKEN")
-
-if token:
-  login(token=token)
-else:
-  print("Error: token not found in .env file")
 
 TASK_NUMBER = 20
 MAX_RETRIES = 10
 
-# --- MODELLI ---
-MODEL_ID_SMALL = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-MODEL_ID_MISTRAL = "mistralai/Mistral-7B-Instruct-v0.3"
-MODEL_ID_DISTILL_LLAMA = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
-MODEL_ID_QWEN = "Qwen/Qwen2.5-Coder-7B-Instruct"
-MODEL_ID_QWEN_SA = "Qwen/Qwen2.5-Coder-14B-Instruct" 
-MODEL_ID_MISTRAL_NEMO = "mistralai/Mistral-Nemo-Instruct-2407"
+# --- MODEL ---
+MODEL_ID = "gemini-2.5-flash-lite"
 
-# --- CLIENTS ---
-LLM_SMALL_CLIENT = LLMClient(model_id=MODEL_ID_SMALL)
-LLM_MISTRAL_CLIENT = LLMClient(model_id=MODEL_ID_MISTRAL)
-LLM_DISTILL_LLAMA_CLIENT = LLMClient(model_id=MODEL_ID_DISTILL_LLAMA)
-LLM_QWEN = LLMClient(model_id=MODEL_ID_QWEN)
-LLM_QWEN_SA = LLMClient(model_id=MODEL_ID_QWEN_SA)
-LLM__MISTRAL_NEMO_CLIENT = LLMClient(model_id=MODEL_ID_MISTRAL_NEMO)
+# --- CLIENT ---
+LLM_CLIENT = LLMClient(model_id=MODEL_ID)
 
-def clear_hf_cache():
-  """ Cleans RAM and disk aggressively """
-  print("\n[SYSTEM] Starting deep cleaning...")
-  if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
-  gc.collect()
-  
-  cache_path = os.path.expanduser("~/.cache/huggingface/hub")
-  if os.path.exists(cache_path):
-    try:
-      shutil.rmtree(cache_path)
-      os.makedirs(cache_path, exist_ok=True)
-      print("[SYSTEM] Disk cache Hugging Face deleted.")
-    except Exception as e:
-      print(f"[SYSTEM] Error in disk cleaning: {e}")
-  else:
-    print("[SYSTEM] No cache found on the disk.")
-  print("[SYSTEM] Cleaning completed.\n")
-
+# Single agent architecture implementation
 def single_agent_arch(task_data, client):
   problem_description = task_data['prompt']
-  prompt = f"""### Role: Expert Python Software Engineer.
-  ### Task: Solve the following programming challenge.
-  ### Problem: {problem_description}
-  ### Strict Constraints:
-  1. **IMPORTS**: Include necessary imports.
-  2. **FORMAT**: Output ONLY the Python code inside ```python``` block.
-  3. **NO TEXT**: No conversational filler.
-  ### Implementation:"""
+  prompt = f"""### SYSTEM INSTRUCTION
+  You are a Python Code Generation Engine. 
+  You are NOT a chat assistant. You DO NOT explain code.
+  Your output is piped directly into a Python compiler. Any text that is not valid Python code (outside the markdown block) will cause a system crash.
+
+  ### TASK
+  Write a complete, self-contained Python solution for the following problem.
+
+  ### PROBLEM SPECIFICATION
+  {problem_description}
+
+  ### COMPILER REQUIREMENTS (STRICT):
+  1.  **Imports**: Include ALL standard library imports at the top (e.g., `import math`, `from typing import List`).
+  2.  **No Comments**: Do not add comments explaining *how* the code works. Only docstrings inside the function are allowed.
+  3.  **Complete Logic**: The code must handle edge cases and return the correct result.
+  4.  **Format**: Return the code strictly inside a single markdown block.
+
+  ### OUTPUT GENERATION
+  ```python
+  """
   
   try:
     response = client.generate_response(prompt, max_new_tokens=1024, temperature=0.3)[0]
@@ -111,7 +61,8 @@ def single_agent_arch(task_data, client):
     print(f"Error in Single Agent: {e}")
     return ""
 
-def run_pipeline(task_data, planner_client, coder_client, tester_client, commenter_client, config_name):
+# Multi agent architecture implementation
+def run_pipeline(task_data, client, config_name):
   task_id = task_data['task_id']
   prompt = task_data['prompt']
   unit_tests = task_data['test']
@@ -119,24 +70,25 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
   
   print(f"--- Running {config_name} on {task_id} ---")
 
-  planner = PlannerAgent(llm_client=planner_client)
+  planner = PlannerAgent(llm_client=client)
   plan = planner.plan(prompt)
   
-  coder = CoderAgent(llm_client=coder_client)
-  reviewer = ReviewerAgent(llm_client=tester_client)
-  
-  context = reviewer.prepare_review_context(prompt, unit_tests, entry_point)
+  coder = CoderAgent(llm_client=client)
+  reviewer = ReviewerAgent(llm_client=client)
 
   current_code = ""
   feedback = ""
   is_passing = False
   attempts = 0
 
+  # Try up to MAX_RETRIES to get passing code
   while attempts < MAX_RETRIES and not is_passing:
+    time.sleep(30)
     current_code = coder.code(prompt, plan, current_code, feedback)
     print(f"  [DEBUG] Code generated:\n", current_code)
     
-    success, error_msg = reviewer.perform_static_review(current_code, context)
+    time.sleep(30)
+    success, error_msg = reviewer.review(current_code, prompt, unit_tests, entry_point)
     
     if success:
       is_passing = True
@@ -147,14 +99,18 @@ def run_pipeline(task_data, planner_client, coder_client, tester_client, comment
       print(f"  [Attempt {attempts}] Failed.")
       print(f"  [DEBUG] error_msg: {error_msg}")
 
-  commenter = CommenterAgent(llm_client=commenter_client)
+  # If not passing, return empty code
+  if not is_passing:
+    return ""
+  
+  commenter = CommenterAgent(llm_client=client)
+  time.sleep(30)
   final_code = commenter.comment(current_code)
   return final_code
 
 # --- METRICS AND SAVING ---
-
 def save_intermediate_code(task_number, arch_number, code):
-  """Saved the code made by every architeture in a secific file."""
+  """Saved the code made by every architeture in a specific file."""
   if not code: return
   
   # Creating the folder
@@ -171,7 +127,7 @@ def save_intermediate_code(task_number, arch_number, code):
       print(f"[FILE] Saved architecture code to: {filepath}")
   except Exception as e:
       print(f"[FILE] Error saving file {filepath}: {e}")
-
+'''
 def measure_execution_time(func, *args, iterations=100):
   start_time = time.perf_counter()
   try:
@@ -179,7 +135,7 @@ def measure_execution_time(func, *args, iterations=100):
   except: pass
   end_time = time.perf_counter()
   return (end_time - start_time) / iterations
-
+'''
 def calculate_maintainability(code):
   try: return mi_visit(code, multi=True)
   except: return 0.0
@@ -191,96 +147,58 @@ def get_cyclomatic_complexity(code):
     return max(f.complexity for f in v.functions) 
   except: return 1
 
-def save_metrics_to_csv(task_number, arch_name, mi, cc, exec_time, score, passed, tests_ratio):
+def save_metrics_to_csv(task_number, arch_name, mi, cc, exec_time, score):
   filename = "metrics_results.csv"
   file_exists = os.path.exists(filename)
   
   with open(filename, 'a', newline='') as f:
     writer = csv.writer(f)
     if not file_exists:
-      writer.writerow(['Task', 'Architecture', 'Passed', 'Tests_Ratio', 'MI', 'CC', 'Time', 'Score'])
+      writer.writerow(['Task', 'Architecture', 'MI', 'CC', 'Time', 'Score'])
     
     writer.writerow([
-      task_number, 
-      arch_name, 
-      passed, 
-      tests_ratio, 
-      f"{mi:.2f}", 
-      f"{cc:.2f}", 
-      f"{exec_time:.6f}", 
-      f"{score:.4f}"
+    task_number,
+    arch_name,
+    f"{mi:.2f}", 
+    f"{cc:.2f}", 
+    f"{exec_time:.6f}", 
+    f"{score:.4f}"
     ])
-  print(f"[METRICS] Saved for {arch_name} (Tests: {tests_ratio})")
+  print(f"[METRICS] Saved for {arch_name} of Task {task_number})")
 
 def evaluate_and_log(code, arch_name, task_data, i):
   entry_point = task_data['entry_point']
   
-  testers_map = {
-    1: TestTask1, 2: TestTask2, 3: TestTask3, 4: TestTask4, 5: TestTask5,
-    6: TestTask6, 7: TestTask7, 8: TestTask8, 9: TestTask9, 10: TestTask10,
-    11: TestTask11, 12: TestTask12, 13: TestTask13, 14: TestTask14, 15: TestTask15,
-    16: TestTask16, 17: TestTask17, 18: TestTask18, 19: TestTask19, 20: TestTask20
-  }
-  
-  namespace = {}
-  tests_ratio_str = "0/0"
-  
-  try:
-    exec(code, namespace)
-    func = namespace.get(entry_point)
+  if not code:
+    print(f"  No code generated for {arch_name}.")
+    save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1)
+    return -1
+  elif entry_point not in code:
+    print(f"  Function entry point '{entry_point}' not found in {arch_name}.")
+    save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1)
+    return -1
+  else:
+    mi = calculate_maintainability(code)
+    cc = get_cyclomatic_complexity(code)
     
-    if func:
-      tester_cls = testers_map.get(i+1)
-      if tester_cls:
-        tester = tester_cls(func)
-        passed_tests, total_tests = tester.execute_tests()
-        tests_ratio_str = f"{passed_tests}/{total_tests}"
-        
-        passed = (passed_tests == total_tests) and (total_tests > 0)
-        
-        if passed:
-          try:
-            params = tester.get_benchmark_input()
-            exec_time = measure_execution_time(func, *params)
-          except: exec_time = 0.001
-          
-          mi = calculate_maintainability(code)
-          cc = get_cyclomatic_complexity(code)
-          
-          mi_norm = min(max(mi, 0), 100) / 100
-          cc_norm = 1.0 if cc <= 1 else 1.0 / cc
-          time_norm = 0.00001 / max(exec_time, 0.00001)
-          score = (time_norm * 0.5) + (mi_norm * 0.3) + (cc_norm * 0.2)
-          
-          save_metrics_to_csv(i+1, arch_name, mi, cc, exec_time, score, "YES", tests_ratio_str)
-          return score
-        else:
-          print(f"  {arch_name} failed tests: {tests_ratio_str}")
-          save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1, "NO", tests_ratio_str)
-          return 0.0
-      else:
-        print("  Tester class not found.")
-        save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1, "NO_TESTER", "0/0")
-        return 0.0
-    else:
-      print("  Function entry point not found.")
-      save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1, "NO_FUNC", "0/0")
-      return 0.0
-          
-  except Exception as e:
-    print(f"  Error evaluating {arch_name}: {e}")
-    save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1, "ERROR", "0/0")
-    return 0.0
+    mi_norm = min(max(mi, 0), 100) / 100
+    cc_norm = 1.0 if cc <= 1 else 1.0 / cc
+    #exec_time = measure_execution_time(LLM_CLIENT.execute_code, code, entry_point, task_data['test'], iterations=10)
+    #exec_time_default = 0.001
+    #time_norm = 0.00001 / max(exec_time_default, 0.00001)
+    #score = (time_norm * 0.5) + (mi_norm * 0.3) + (cc_norm * 0.2)
+    score = (mi_norm * 0.5) + (cc_norm * 0.5)
+    #save_metrics_to_csv(i+1, arch_name, mi, cc, exec_time, score)
+    save_metrics_to_csv(i+1, arch_name, mi, cc, 0, score)
+    return score
+
 
 def main():
   print("Architectures:")
   print("1. Single Agent")
-  print("2. Mistral -> Qwen")
-  print("3. Mistral -> Mistral Nemo")
-  print("4. DeepSeek -> Qwen")
-  print("5. DeepSeek -> Mistral Nemo")
+  print("2. Multi Agent")
 
-  for i in range(TASK_NUMBER):
+  for i in range(1,2):
     task_file = f"tasks/task_{i+1:02}.json"
     if not os.path.exists(task_file): continue
 
@@ -288,54 +206,16 @@ def main():
       task_data = json.load(f)
     
     print(f"\n===== TASK {i+1} =====")
-    
-    best_score = -1
-    best_code = None
-    best_arch = "None"
 
-    # --- PIPELINE 1 ---
-    clear_hf_cache()
-    code1 = single_agent_arch(task_data, LLM_QWEN_SA)
+    # --- Single Agent ---
+    code1 = single_agent_arch(task_data, LLM_CLIENT)
     save_intermediate_code(i+1, 1, code1)
-    score1 = evaluate_and_log(code1, "1_SingleAgent", task_data, i)
-    if score1 > best_score: best_score, best_code, best_arch = score1, code1, "1"
+    evaluate_and_log(code1, "1_SingleAgent", task_data, i)
 
-    # --- PIPELINE 2 ---
-    clear_hf_cache()
-    code2 = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM_QWEN_SA, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 2")
+    # --- Multi Agent ---
+    code2 = run_pipeline(task_data, LLM_CLIENT, "2_MultiAgent")
     save_intermediate_code(i+1, 2, code2)
-    score2 = evaluate_and_log(code2, "2_Mistral_Qwen", task_data, i)
-    if score2 > best_score: best_score, best_code, best_arch = score2, code2, "2"
-
-    # --- PIPELINE 3 ---
-    clear_hf_cache()
-    code3 = run_pipeline(task_data, LLM_MISTRAL_CLIENT, LLM__MISTRAL_NEMO_CLIENT, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 3")
-    save_intermediate_code(i+1, 3, code3)
-    score3 = evaluate_and_log(code3, "3_Mistral_Nemo", task_data, i)
-    if score3 > best_score: best_score, best_code, best_arch = score3, code3, "3"
-
-    # --- PIPELINE 4 ---
-    clear_hf_cache()
-    code4 = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM_QWEN_SA, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 4")
-    save_intermediate_code(i+1, 4, code4)
-    score4 = evaluate_and_log(code4, "4_DeepSeek_Qwen", task_data, i)
-    if score4 > best_score: best_score, best_code, best_arch = score4, code4, "4"
-
-    # --- PIPELINE 5 ---
-    clear_hf_cache()
-    code5 = run_pipeline(task_data, LLM_DISTILL_LLAMA_CLIENT, LLM__MISTRAL_NEMO_CLIENT, LLM_QWEN_SA, LLM_SMALL_CLIENT, "Arch 5")
-    save_intermediate_code(i+1, 5, code5)
-    score5 = evaluate_and_log(code5, "5_DeepSeek_Nemo", task_data, i)
-    if score5 > best_score: best_score, best_code, best_arch = score5, code5, "5"
-
-    # --- SAVE BEST CODE ---
-    if best_code:
-      print(f"\nWINNER: Architecture {best_arch} with score {best_score:.4f}")
-      output_path = f"code/task{i+1:02}.py" # overrides
-      with open(output_path, "w") as f_out:
-        f_out.write(best_code)
-    else:
-      print("No fully working code generated among all architectures.")
+    evaluate_and_log(code2, "2_MultiAgent", task_data, i) 
 
 if __name__ == '__main__':
   main()
