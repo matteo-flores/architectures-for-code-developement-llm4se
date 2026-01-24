@@ -3,8 +3,7 @@ import os
 import re
 import time
 import csv
-#from dotenv import load_dotenv
-#from huggingface_hub import login
+import sys
 
 # --- IMPORT AGENTS ---
 from utils.llm_client import LLMClient
@@ -13,6 +12,8 @@ from agents.coder import CoderAgent
 from agents.reviewer import ReviewerAgent
 from agents.commenter import CommenterAgent
 from radon.metrics import mi_visit, ComplexityVisitor
+
+sys.set_int_max_str_digits(0)
 
 
 TASK_NUMBER = 20
@@ -83,11 +84,11 @@ def run_pipeline(task_data, client, config_name):
 
   # Try up to MAX_RETRIES to get passing code
   while attempts < MAX_RETRIES and not is_passing:
-    time.sleep(30)
+    time.sleep(4)
     current_code = coder.code(prompt, plan, current_code, feedback)
     print(f"  [DEBUG] Code generated:\n", current_code)
     
-    time.sleep(30)
+    time.sleep(4)
     success, error_msg = reviewer.review(current_code, prompt, unit_tests, entry_point)
     
     if success:
@@ -104,7 +105,7 @@ def run_pipeline(task_data, client, config_name):
     return ""
   
   commenter = CommenterAgent(llm_client=client)
-  time.sleep(30)
+  time.sleep(4)
   final_code = commenter.comment(current_code)
   return final_code
 
@@ -218,19 +219,40 @@ def evaluate_and_log(code, arch_name, task_data, i):
     print(f"  Function entry point '{entry_point}' not found in {arch_name}.")
     save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1)
     return -1
-  else:
-    mi = calculate_maintainability(code)
-    cc = get_cyclomatic_complexity(code)
-    
-    mi_norm = min(max(mi, 0), 100) / 100
-    cc_norm = 1.0 if cc <= 1 else 1.0 / cc
-    input = load_stress_input(i+1)
-    exec_time = measure_execution_time(LLM_CLIENT.execute_code, input)
-    exec_time_default = 0.001
-    time_norm = 0.00001 / max(exec_time_default, 0.00001)
-    score = (time_norm * 0.4) + (mi_norm * 0.3) + (cc_norm * 0.3)
-    save_metrics_to_csv(i+1, arch_name, mi, cc, exec_time, score)
-    return score
+  
+  namespace = {}
+  try:
+    exec(code, namespace)
+  except Exception as e:
+    print(f"  [EVAL ERROR] Syntax error in generated code: {e}")
+    save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1)
+    return -1
+
+  if entry_point not in namespace:
+    print(f"  Function entry point '{entry_point}' not found in {arch_name}.")
+    save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1)
+    return -1
+  
+  # Estraiamo la funzione VERA dal codice compilato
+  func_to_test = namespace[entry_point]
+  
+  mi = calculate_maintainability(code)
+  cc = get_cyclomatic_complexity(code)
+  
+  mi_norm = min(max(mi, 0), 100) / 100
+  cc_norm = 1.0 if cc <= 1 else 1.0 / cc
+
+  input = load_stress_input(i+1)
+  func_to_test = namespace[entry_point]
+  exec_time = measure_execution_time(func_to_test, input)
+  target_time = 0.1 
+  exec_time_safe = max(exec_time, 0.00001)
+  time_norm = target_time / exec_time_safe
+  time_norm = min(time_norm, 1.0)
+  
+  score = (time_norm * 0.4) + (mi_norm * 0.3) + (cc_norm * 0.3)
+  save_metrics_to_csv(i+1, arch_name, mi, cc, exec_time, score)
+  return score
 
 
 def main():
