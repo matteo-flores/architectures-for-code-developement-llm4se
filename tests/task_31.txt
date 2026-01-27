@@ -1,0 +1,11 @@
+('XtremeTest', [
+    'aBc123',
+    'XYZ..def',
+    'NO_NUMBERS',
+    'Mix3d.Cha0s!!',
+    'ALLUPPERCASE',
+    'tie1breaker',
+    'TIEbreaker2',
+    'ABC.123.def',
+    'FinalTest.CHECK'
+])
