@@ -21,9 +21,9 @@ Task,Architecture,MI,CC,Time,Score
 18,2_MultiAgent,65.67,3.00,0.000002,0.6647
 19,1_SingleAgent,100.00,1.00,0.000003,1.0000
 19,2_MultiAgent,100.00,2.00,0.000003,0.8000
+-------- NONTRIVIAL TASKS --------
 20,1_SingleAgent,57.94,7.00,0.007359,0.5730
 20,2_MultiAgent,60.98,6.00,0.006748,0.5886
--------- NONTRIVIAL TASKS --------
 22,1_SingleAgent,64.11,5.00,0.000006,0.6082
 22,2_MultiAgent,64.92,5.00,0.000004,0.6098
 24,1_SingleAgent,-1.00,-1.00,-1.000000,-1.0000
