@@ -40,3 +40,5 @@ Task,Architecture,MI,CC,Time,Score
 29,2_MultiAgent,48.59,5.00,0.000024,0.5772
 30,1_SingleAgent,61.39,6.00,13.033335,0.1925
 30,2_MultiAgent,55.45,4.00,0.000175,0.6109
+31,1_SingleAgent,60.48,9.00,0.003168,0.5654
+31,2_MultiAgent,57.93,6.00,0.000026,0.5825
