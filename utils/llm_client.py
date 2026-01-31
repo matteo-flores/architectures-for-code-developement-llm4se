@@ -16,7 +16,7 @@ class LLMClient:
         
     self.api_keys = self._load_api_keys()
     if not self.api_keys:
-      raise ValueError("Nessuna chiave GEMINI_API_KEY trovata nel file .env")
+      raise ValueError("No GEMINI_API_KEY found in .env file")
     
     self.current_key_index = 0
     self._configure_current_key()
@@ -45,7 +45,7 @@ class LLMClient:
 
   def generate_response(self, prompt: str, max_new_tokens: int = 500, temperature: float = 0.7, deterministic: bool = False, **kwargs) -> tuple[str, int, int]:
     """
-    sends a prompt to the model, return the response and the tokens used/returned
+    Sends a prompt to the model, return the response and the tokens used/returned
 
     Returns: (response_text, input_tokens, generated_tokens)
     """
@@ -77,7 +77,7 @@ class LLMClient:
         print(f"[GEMINI] Response blocked. Safety ratings: {response.prompt_feedback}")
         return "", 0, 0
 
-      # 5. Estrazione Metriche Token (Usage Metadata)
+      # Token Metrics Extraction (Usage Metadata)
       input_tokens = 0
       generated_tokens = 0
       
@@ -85,7 +85,7 @@ class LLMClient:
           input_tokens = response.usage_metadata.prompt_token_count
           generated_tokens = response.usage_metadata.candidates_token_count
       
-      # rate limit for Gemini's constraints
+      # Rate limit for Gemini's constraints
       time.sleep(1)
 
       return response_text, input_tokens, generated_tokens
