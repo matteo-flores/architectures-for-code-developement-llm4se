@@ -15,20 +15,20 @@ class ReviewerAgent:
         """
         print("   [Reviewer] Starting dynamic execution...")
         
-        # Esegue i test reali
+        # Run real tests
         tests_passed, error_msg = self._execute_tests(current_code, test_code_string, entry_point)
 
         if tests_passed:
             print("   [Reviewer] Code passed dynamic tests.")
             return True, "Passed"
 
-        # Se falliscono, chiediamo aiuto all'LLM passando l'errore specifico
+        # If they fail, we ask the LLM for help by passing the specific error
         print(f"   [Reviewer] Tests failed. Error: {error_msg}")
         return self._analyze_failure(current_code, task_prompt, error_msg, test_code_string)
 
     def _execute_tests(self, generated_code: str, test_code_string: str, entry_point: str) -> tuple[bool, str]:
         """
-        Esegue il codice generato e poi esegue la stringa di test 'check(candidate)'.
+        Runs the generated code and then executes the test string 'check(candidate)'.
         """
         namespace = {}
         output_capture = io.StringIO()
@@ -56,21 +56,19 @@ class ReviewerAgent:
             return True, "Passed"
 
         except AssertionError:
-            # HumanEval spesso non ha messaggi negli assert, quindi è difficile sapere QUALE input ha fallito
-            # senza analizzare l'AST. Per ora torniamo un errore generico.
             return False, "AssertionError: The code produced incorrect results on one of the test cases."
             
         except SyntaxError as e:
             return False, f"Syntax Error in generated code: {e}"
             
         except Exception as e:
-            # Cattura errori a runtime (es. TypeError, IndexError, ecc.)
+            # Catch errors at runtime (e.g. TypeError, IndexError, etc.)
             tb = traceback.format_exc()
             return False, f"Runtime Error during testing: {str(e)}"
 
     def _analyze_failure(self, code: str, task: str, error_msg: str, test_code: str) -> tuple[bool, str]:
         """
-        Chiede all'LLM come aggiustare il codice basandosi sull'errore.
+        Ask the LLM how to fix the code based on the error.
         """
         prompt = textwrap.dedent(f"""\
             You are a Senior Python Debugger.
@@ -110,7 +108,7 @@ class ReviewerAgent:
 
         clean_response = response_text.strip()
         if "STATUS: FAIL" not in clean_response:
-            # Fallback se l'LLM non rispetta il formato
+            # Fallback if the LLM does not comply with the format
             return False, f"Tests failed: {error_msg}"
             
         parts = clean_response.split("STATUS: FAIL")
