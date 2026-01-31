@@ -4,6 +4,7 @@ import re
 import time
 import csv
 import sys
+import ast
 
 # --- IMPORT AGENTS ---
 from utils.llm_client import LLMClient
@@ -129,8 +130,6 @@ def save_intermediate_code(task_number, arch_number, code):
   except Exception as e:
       print(f"[FILE] Error saving file {filepath}: {e}")
 
-import ast # Aggiungi questo import in cima al file
-
 def load_stress_input(task_number):
   """
   Reads input/task_XX.txt.
@@ -158,7 +157,7 @@ def load_stress_input(task_number):
 
 def measure_execution_time(func, input_data):
   """
-  executes the funcion using the input stress
+  Executes the funcion using the input stress
   """
   if input_data is None:
     return 0.001 # default
@@ -186,7 +185,7 @@ def clean_code_for_metrics(code):
   except SyntaxError:
     return code
 
-  # removing docstrings
+  # Removes docstrings
   for node in ast.walk(parsed):
     if not isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef, ast.Module)):
       continue
@@ -201,7 +200,7 @@ def clean_code_for_metrics(code):
       elif hasattr(val, 's'): 
         node.body.pop(0)
 
-  # removing comments
+  # Removes comments
   try:
     return ast.unparse(parsed)
   except AttributeError:
@@ -266,7 +265,6 @@ def evaluate_and_log(code, arch_name, task_data, i):
     save_metrics_to_csv(i+1, arch_name, -1, -1, -1, -1)
     return -1
   
-  # Estraiamo la funzione VERA dal codice compilato
   func_to_test = namespace[entry_point]
   
   mi = calculate_maintainability(code)
