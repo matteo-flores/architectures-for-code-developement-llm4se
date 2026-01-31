@@ -13,17 +13,14 @@ class CoderAgent:
         'plan' is optional. If None, the agent codes directly from the prompt.
         """
         
-        # 1. Gestione dinamica della Signature
-        # Se non c'è il piano, diciamo all'LLM di dedurla dal testo del problema.
+
         signature_instruction = "Infer the function signature directly from the PROBLEM description."
         
         if plan:
-            # Se c'è il piano, proviamo a estrarre la firma
             extracted_sig = self._extract_signature_from_plan(plan)
             if extracted_sig:
                 signature_instruction = f"Use exactly this function signature: {extracted_sig}"
 
-        # 2. Selezione Template (Fix o Generazione)
         if current_code and feedback:
             full_prompt = self._fix_prompt_template(
                 prompt=prompt,
@@ -41,7 +38,6 @@ class CoderAgent:
             )
             temp = 0.2
         
-        # 3. Chiamata LLM
         response = self.llm.generate_response(
             full_prompt,
             temperature=temp,
@@ -54,7 +50,6 @@ class CoderAgent:
         return self._extract_clean_code(response)
 
     def _extract_signature_from_plan(self, plan: str) -> str:
-        # Controllo di sicurezza: se plan è None, ritorna stringa vuota
         if not plan:
             return ""
         
@@ -65,7 +60,6 @@ class CoderAgent:
 
     def _generate_prompt_template(self, *, prompt: str, plan: str, signature_instruction: str) -> str:
         
-        # Inseriamo la sezione Piano solo se esiste
         if plan:
             plan_section = f"""
             ### THE PLAN TO FOLLOW

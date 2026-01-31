@@ -14,15 +14,15 @@ from agents.reviewer import ReviewerAgent
 from agents.commenter import CommenterAgent
 from radon.metrics import mi_visit, ComplexityVisitor
 
-# Aumenta il limite per la conversione stringa-int (necessario per task matematici pesanti)
+
 sys.set_int_max_str_digits(0)
 
-# CONFIGURAZIONE GLOBALE
+
 TASK_NUMBER = 30 
 MAX_RETRIES = 10
 MODEL_ID = "gemini-2.5-flash-lite"
 
-# --- CLIENT ---
+
 LLM_CLIENT = LLMClient(model_id=MODEL_ID)
 
 # ---------------------------------------------------------
@@ -101,11 +101,11 @@ def run_pipeline(task_data, client, config_name, use_planner=True):
     while attempts < MAX_RETRIES and not is_passing:
         time.sleep(2) # Rate limit safety
         
-        # Il Coder gestisce internamente se plan è None o popolato
+
         current_code = coder.code(prompt, plan, current_code, feedback)
         print(current_code)
         
-        # Logging breve per debug
+
         snippet = current_code.split('\n')[0] if current_code else "No Code"
         print(f"  [Attempt {attempts+1}] Generated: {snippet}...")
         
@@ -138,10 +138,6 @@ def save_intermediate_code(task_number, arch_number, code):
     output_dir = "code"
     os.makedirs(output_dir, exist_ok=True)
     
-    # File naming convention:
-    # task01_1.py -> Single Agent
-    # task01_2.py -> Multi Agent (Full)
-    # task01_3.py -> Coder Only (No Planner)
     filename = f"task{task_number:02}_{arch_number}.py"
     filepath = os.path.join(output_dir, filename)
     
