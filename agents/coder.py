@@ -37,11 +37,6 @@ class CoderAgent:
     if isinstance(response, tuple):
         response = response[0]
 
-            # DEBUG TEMPORANEO
-    print("\n===== RAW LLM OUTPUT =====\n")
-    print(response)
-    print("\n==========================\n")
-
     return self._extract_clean_code(response)
 
   def _extract_signature_from_plan(self, plan: str) -> str:
@@ -116,27 +111,27 @@ class CoderAgent:
 
 
   def _extract_clean_code(self, response: str) -> str:
-    # Rimuove tutti i blocchi markdown lasciando solo il contenuto testuale
+    # Removes all markdown blocks leaving only the text content
     response = re.sub(r"```python", "", response, flags=re.IGNORECASE)
     response = re.sub(r"```", "", response)
     
     lines = response.splitlines()
     code_lines = []
     
-    # Identifichiamo parole chiave che segnalano l'inizio del codice reale
+    # We identify keywords that signal the start of the real code
     code_keywords = ("import ", "from ", "def ", "class ")
     
     in_code_block = False
     for line in lines:
         stripped = line.strip()
         
-        # Inizia a raccogliere dalla prima riga di codice (import o def)
+        # Start collecting from the first line of code (import or def)
         if any(stripped.startswith(k) for k in code_keywords):
             in_code_block = True
             
         if in_code_block:
-            # Continua a raccogliere finché le righe sono coerenti con il codice
-            # (indentate, vuote, o nuove definizioni/import)
+            # Continue collecting until the lines are consistent with the code
+            # (indented, empty, or new definitions/imports)
             if line.startswith(" ") or line.startswith("\t") or stripped == "" or any(stripped.startswith(k) for k in code_keywords):
                 code_lines.append(line)
             else:
